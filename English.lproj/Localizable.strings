@@ -1,2 +1,6 @@
 "TurnOnTooltip" = "Caffeine is OFF.\nClick to prevent your Mac from going to sleep";
 "TurnOffTooltip" = "Caffeine is ON.\nClick to allow your Mac to go to sleep";
+"%02d:%02d left" = "%02d:%02d left";
+"%d minutes left" = "%d minutes left";
+"%d seconds left" = "%d seconds left";
+"Caffeine is active" = "Caffeine is active";

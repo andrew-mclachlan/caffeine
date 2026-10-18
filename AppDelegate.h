@@ -4,30 +4,15 @@
 //
 //  Created by Tomas Franzén on 2006-05-20.
 //  Copyright 2006 Lighthead Software. All rights reserved.
+//  Modified 2026 by Andrew McLachlan
 //
 
 #import <Cocoa/Cocoa.h>
 #import "LCMenuIconView.h"
 
-// Workaround for bug in 64-bit SDK
-#ifndef __POWER__
-enum {
-	OverallAct                    = 0,    /* Delays idle sleep by small amount                 */
-	UsrActivity                   = 1,    /* Delays idle sleep and dimming by timeout time          */
-	NetActivity                   = 2,    /* Delays idle sleep and power cycling by small amount         */
-	HDActivity                    = 3,    /* Delays hard drive spindown and idle sleep by small amount  */
-	IdleActivity                  = 4     /* Delays idle sleep by timeout time                 */
-};
-
-extern OSErr UpdateSystemActivity(UInt8 activity);
-#endif
-
-
-
-@interface AppDelegate : NSObject {
+@interface AppDelegate : NSObject <NSApplicationDelegate, NSMenuDelegate> {
 	BOOL isActive;
-	BOOL userSessionIsActive;
-	NSTimer *timer;
+	id<NSObject> activity;
 	NSTimer *timeoutTimer;
 	
 	LCMenuIconView *menuView;
@@ -47,6 +32,4 @@ extern OSErr UpdateSystemActivity(UInt8 activity);
 - (BOOL)isActive;
 - (void)toggleActive:(id)sender;
 
-- (void)userSessionDidResignActive:(NSNotification *)note;
-- (void)userSessionDidBecomeActive:(NSNotification *)note;
 @end

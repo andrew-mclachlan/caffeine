@@ -4,33 +4,20 @@
 //
 //  Created by Tomas Franzén on 2006-05-20.
 //  Copyright 2006 Lighthead Software. All rights reserved.
+//  Modified 2026 by Andrew McLachlan
 //
 
 #import "AppDelegate.h"
-#import <CoreServices/CoreServices.h>
+@import ServiceManagement;
 
 
 @implementation AppDelegate
 
-- (id)init {
-	[super init];
-	timer = [[NSTimer scheduledTimerWithTimeInterval:10.0 target:self selector:@selector(timer:) userInfo:nil repeats:YES] retain];
-	
-	// Workaround for a bug in Snow Leopard where Caffeine would prevent the computer from going to sleep when another account was active.
-	userSessionIsActive = YES;
-	[[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(userSessionDidResignActive:) name:NSWorkspaceSessionDidResignActiveNotification object:nil];
-	[[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(userSessionDidBecomeActive:) name:NSWorkspaceSessionDidBecomeActiveNotification object:nil];
-	
-	return self;
-}
-
-
 - (void)awakeFromNib {
 	
-	NSStatusItem *item = [[[NSStatusBar systemStatusBar] statusItemWithLength:30] retain];
-	menuView = [[LCMenuIconView alloc] initWithFrame:NSZeroRect];
-	[item setView:menuView];
-	[menuView setStatusItem:item];
+	NSStatusItem *item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
+	menuView = [[LCMenuIconView alloc] initWithStatusItem:item];
+	[menuView setTarget:self];
 	[menuView setMenu:menu];
 	[menuView setAction:@selector(toggleActive:)];
 	
@@ -46,21 +33,27 @@
 
 
 - (void)dealloc {
-	[timer invalidate];
-	[timer release];
+	[self endActivity];
 	[menuView release];
 	[timeoutTimer release];
 	[super dealloc];
 }
 
 
-- (BOOL)screensaverIsRunning {
-	NSString *activeAppID = [[[NSWorkspace sharedWorkspace] activeApplication] objectForKey:@"NSApplicationBundleIdentifier"];
-	NSArray *bundleIDs = [NSArray arrayWithObjects:@"com.apple.ScreenSaver.Engine", @"com.apple.loginwindow", nil];
-	return activeAppID && [bundleIDs containsObject:activeAppID];
+// Holding an activity keeps the display and system from idle sleeping. It is released
+// automatically if the process exits, so a crash can't leave the Mac awake.
+- (void)beginActivity {
+	if(activity) return;
+	activity = [[[NSProcessInfo processInfo] beginActivityWithOptions:(NSActivityIdleDisplaySleepDisabled | NSActivityIdleSystemSleepDisabled)
+															   reason:@"Caffeine is active"] retain];
 }
 
-
+- (void)endActivity {
+	if(!activity) return;
+	[[NSProcessInfo processInfo] endActivity:activity];
+	[activity release];
+	activity = nil;
+}
 
 
 - (void)activateWithTimeoutDuration:(NSTimeInterval)interval {
@@ -69,6 +62,7 @@
 	if(interval > 0)
 		timeoutTimer = [[NSTimer scheduledTimerWithTimeInterval:interval target:self selector:@selector(timeoutReached:) userInfo:nil repeats:NO] retain];
 	isActive = YES;
+	[self beginActivity];
 	[menuView setActive:isActive];
 	
 	NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithDouble:interval ? interval : -1], @"duration", nil];
@@ -81,6 +75,7 @@
 
 - (void)deactivate {
 	isActive = NO;
+	[self endActivity];
 	if(timeoutTimer) [[timeoutTimer autorelease] invalidate];
 	timeoutTimer = nil;
 	[menuView setActive:isActive];
@@ -91,8 +86,8 @@
 
 
 - (IBAction)activateWithTimeout:(id)sender {
-	int minutes = [(NSMenuItem*)sender tag];
-	int seconds = minutes*60;
+	NSInteger minutes = [(NSMenuItem*)sender tag];
+	NSInteger seconds = minutes*60;
 	if(seconds == -60) seconds = 2;
 	if(minutes)
 		[self activateWithTimeoutDuration:seconds];
@@ -109,8 +104,8 @@
 	if(isActive) {
 		[self deactivate];
 	} else {
-		int defaultMinutesDuration = [[NSUserDefaults standardUserDefaults] integerForKey:@"DefaultDuration"];
-		int seconds = defaultMinutesDuration*60;
+		NSInteger defaultMinutesDuration = [[NSUserDefaults standardUserDefaults] integerForKey:@"DefaultDuration"];
+		NSInteger seconds = defaultMinutesDuration*60;
 		if(seconds == -60) seconds = 2;
 		if(defaultMinutesDuration)
 			[self activateWithTimeoutDuration:seconds];
@@ -128,14 +123,6 @@
 	return isActive;
 }
 
-- (void)userSessionDidResignActive:(NSNotification *)note {
-	userSessionIsActive = NO;
-}
-
-- (void)userSessionDidBecomeActive:(NSNotification *)note {
-	userSessionIsActive = YES;
-}
-
 - (IBAction)showAbout:(id)sender {
 	[NSApp activateIgnoringOtherApps:YES];
 	[NSApp orderFrontStandardAboutPanel:self];
@@ -148,60 +135,17 @@
 }
 
 
-- (void)timer:(NSTimer*)timer {
-	if(isActive && ![self screensaverIsRunning] && userSessionIsActive)
-		UpdateSystemActivity(UsrActivity);
-}
-
-
-- (LSSharedFileListItemRef)applicationItemInList:(LSSharedFileListRef)list {
-	NSString *appPath = [[NSBundle mainBundle] bundlePath];
-	
-	NSArray *items = (id)LSSharedFileListCopySnapshot(list, NULL);
-	for(id item in items) {    
-		LSSharedFileListItemRef itemRef = (LSSharedFileListItemRef)item;
-		CFURLRef URL = NULL;
-		if(LSSharedFileListItemResolve(itemRef, 0, &URL, NULL)) continue;
-		
-		BOOL matches = [[(NSURL*)URL path] isEqual:appPath];
-		CFRelease(URL);
-		if(matches)
-			return itemRef;
-	}
-	CFRelease(items);
-	return NULL;
-}
-
-
 - (BOOL)startsAtLogin {
-	LSSharedFileListRef loginItems = LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL);
-	LSSharedFileListItemRef item = [self applicationItemInList:loginItems];
-	BOOL starts = (item != NULL);
-	if(item) CFRelease(item);
-	CFRelease(loginItems);
-	return starts;
+	return [[SMAppService mainAppService] status] == SMAppServiceStatusEnabled;
 }
 
 - (void)setStartsAtLogin:(BOOL)start {
 	if(start == [self startsAtLogin]) return;
 	
-	LSSharedFileListRef loginItems = LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL);
-	
-	if(start) {
-		NSString *appPath = [[NSBundle mainBundle] bundlePath];
-		CFURLRef appURL = CFURLCreateWithFileSystemPath(NULL, (CFStringRef)appPath, kCFURLPOSIXPathStyle, YES);
-		LSSharedFileListInsertItemURL(loginItems, kLSSharedFileListItemLast, NULL, NULL, appURL, NULL, NULL);
-		CFRelease(appURL);
-	}else{
-		LSSharedFileListItemRef item = [self applicationItemInList:loginItems];
-		if(item) {
-			LSSharedFileListItemRemove(loginItems, item);
-			CFRelease(item);
-		}
-			
-	}
-	
-	CFRelease(loginItems);
+	NSError *error = nil;
+	BOOL ok = start ? [[SMAppService mainAppService] registerAndReturnError:&error]
+					: [[SMAppService mainAppService] unregisterAndReturnError:&error];
+	if(!ok) NSLog(@"Caffeine: could not change login item: %@", error);
 }
 
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)theApplication hasVisibleWindows:(BOOL)flag {
@@ -216,13 +160,13 @@
 		if(timeoutTimer) {
 			NSTimeInterval left = [[timeoutTimer fireDate] timeIntervalSinceNow];
 			if(left >= 3600)
-				[infoMenuItem setTitle:[NSString stringWithFormat:@"%02d:%02d left", (int)(left/3600), (int)(((int)left%3600)/60)]];
+				[infoMenuItem setTitle:[NSString stringWithFormat:NSLocalizedString(@"%02d:%02d left", @"Time remaining as hours:minutes"), (int)(left/3600), (int)(((int)left%3600)/60)]];
 			else if(left >= 60)
-				[infoMenuItem setTitle:[NSString stringWithFormat:@"%d minutes left", (int)(left/60)]];
+				[infoMenuItem setTitle:[NSString stringWithFormat:NSLocalizedString(@"%d minutes left", @"Time remaining in minutes"), (int)(left/60)]];
 			else
-				[infoMenuItem setTitle:[NSString stringWithFormat:@"%d seconds left", (int)left]];
+				[infoMenuItem setTitle:[NSString stringWithFormat:NSLocalizedString(@"%d seconds left", @"Time remaining in seconds"), (int)left]];
 		}else{
-			[infoMenuItem setTitle:@"Caffeine is active"];
+			[infoMenuItem setTitle:NSLocalizedString(@"Caffeine is active", @"Menu status when active with no timeout")];
 		}
 	}else{
 		[infoMenuItem setHidden:YES];

@@ -19,7 +19,7 @@
 	<key>CFBundleSignature</key>
 	<string>LCaf</string>
 	<key>CFBundleVersion</key>
-	<string>1.1.2</string>
+	<string>2.0.0</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
@@ -31,9 +31,9 @@
 	<key>OSAScriptingDefinition</key>
 	<string>Caffeine.sdef</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>10.6</string>
+	<string>26.0</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.2</string>
+	<string>2.0.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 </dict>

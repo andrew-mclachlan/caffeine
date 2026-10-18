@@ -4,6 +4,7 @@
 //
 //  Created by Tomas Franzén on 2008-06-04.
 //  Copyright 2008 Lighthead Software. All rights reserved.
+//  Modified 2026 by Andrew McLachlan
 //
 
 #import "AppCategory.h"
@@ -16,17 +17,17 @@
 - (void)activateCaffeine:(NSScriptCommand*)command {
 	NSNumber *duration = [[command arguments] objectForKey:@"duration"];
 	if(duration)
-		[[self delegate] activateWithTimeoutDuration:[duration doubleValue]];
+		[(AppDelegate *)[self delegate] activateWithTimeoutDuration:[duration doubleValue]];
 	else
-		[[self delegate] activate];
+		[(AppDelegate *)[self delegate] activate];
 }
 
 - (void)deactivateCaffeine:(NSScriptCommand*)command {
-	[[self delegate] deactivate];
+	[(AppDelegate *)[self delegate] deactivate];
 }
 
 - (BOOL)isCaffeineActive {
-	return [[self delegate] isActive];
+	return [(AppDelegate *)[self delegate] isActive];
 }
 
 @end
